@@ -3,11 +3,17 @@
 const mysql = require('mysql');
 
 const connection = mysql.createConnection({
-  host: 'localhost',
-  user: 'root',
-  database: 'dbdahora',
-  password: ''
+  host: 'soltec.ao',
+  user: 'soltecao_soltec',
+  database: 'soltecao_dahora',
+  password: 'T4$M5y%.x'
 });
 
-connection.connect();
+connection.connect((err)=>{
+    if(err){
+      console.log('connection lost');
+      return;
+    }
+    console.log('connection established');
+});
 module.exports = connection;
