@@ -9,28 +9,22 @@ const jwt = require('jsonwebtoken');
 const db = require('../libs/db.js');
 const userMiddleware = require('../middleware/users.js');
 const emailMiddleware = require('../middleware/email.js');
+const email = require('../middleware/email.js');
+const { random } = require('../middleware/email.js');
 // routes/router.js
 
 //socket.io
 
 
-
-router.get('/socket', (req, res, next)=>{
-  res.send({msg: '...'});
-});
-
-
-
-
 router.post('/sign-up',userMiddleware.validateRegister, (req, res) => {
     db.query(
-      `SELECT * FROM users WHERE LOWER(username) = LOWER(${db.escape(
-        req.body.username
+      `SELECT * FROM users WHERE LOWER(email) = LOWER(${db.escape(
+        req.body.email
       )});`,
       (err, result) => {
         if (result.length) {
           return res.status(409).send({
-            msg: 'This username is already in use!'
+            msg: 'This email is already in use!'
           });
         } else {
           // username is available
@@ -41,11 +35,7 @@ router.post('/sign-up',userMiddleware.validateRegister, (req, res) => {
               });
             } else {
               let cod = emailMiddleware.random();
-              emailMiddleware.sendEmail(req.body.email, cod)
-              /*if(!isNaN(email)){
-                return res.status(401).send({msg: 'network error, email not send'});
-              }*/
-              // has hashed pw => add to database
+              emailMiddleware.sendEmail(req.body.email, cod);
               db.query(
                 `INSERT INTO users (username, password, registred, email, confirmcode, codeforinvitation) VALUES (${db.escape(
                   req.body.username
@@ -70,20 +60,77 @@ router.post('/sign-up',userMiddleware.validateRegister, (req, res) => {
     );
   });
 
-router.post('/confirm-sign-up', (req,res)=>{
+  router.post('/sign-up-driver', userMiddleware.validateRegister, (req, res) => {
+    db.query(
+      `SELECT * FROM drivers WHERE LOWER(email) = LOWER(${db.escape(
+        req.body.email
+      )});`,
+      (err, result) => {
+        if (result.length) {
+          return res.status(409).send({
+            msg: 'This email is already in use!'
+          });
+        } else {
+          // username is available
+          bcrypt.hash(req.body.password, 10, (err, hash) => {
+            if (err) {
+              return res.status(500).send({
+                msg: err
+              });
+            } else {
+              let cod = emailMiddleware.random();
+              //emailMiddleware.sendEmail('info@soltec.ao', cod);
+              // has hashed pw => add to database
+              db.query(
+                `INSERT INTO drivers (username, password, email, employeeid) VALUES (${db.escape(
+                  req.body.username
+                )}, ${db.escape(hash)}, ${db.escape(req.body.email)}, ${db.escape(cod)})`,
+                (err, result) => {
+                  if (err) {
+                    return res.status(400).send({
+                      msg: err
+                    });
+                  }
+                  db.query(`SELECT * FROM drivers WHERE email = ${db.escape(req.body.email)};`, (e, row)=>{
+                        if(row.length){
+                          db.query(`INSERT INTO cars (iddriver, typeofcar, tradecar, colorcar, registrationcar, modelcar)
+                          VALUES (${db.escape(row[0].iddriver)}, ${db.escape(req.body.typeofcar)},
+                          ${db.escape(req.body.tradecar)},${db.escape(req.body.colorcar)}, 
+                          ${db.escape(req.body.registrationcar)},${db.escape(req.body.modelcar)}
+                          )
+                          `, (dErr, dRes)=>{
+                              if(dErr) return res.status(500).send({msg:dErr});
+                              return res.status(201).send({
+                                msg: 'Registered!',
+                                username : req.body.username
+                              });
+                          });
+                        }
+                  });
+                  //return OK
+                }
+              );
+            }
+          });
+        }
+      }
+    );
+  });
+
+
+router.post('/confirm-sign-up', (req,res) =>{
   const confirmCode = req.body.confirmcode;
   db.query(`SELECT * FROM users WHERE confirmcode = ${db.escape(confirmCode)}`, function(err, result){
 
       if(err){
-        console.log(err);
-        return res.status(401).send({result});
+        return res.status(401).send({err});
       }else{
         if(confirmCode){
           if(result[0].validate === '0'){
              //console.log(result[0].validate);
              db.query(`UPDATE users SET validate = ${'1'}, confirmcode = ${'0'} WHERE iduser = ${db.escape(result[0].iduser)}`, function(e, r){
               return res.status(200).send({msg: 'updated....'});
-             })
+             });
              
           }else{
             console.log(err);
@@ -99,7 +146,7 @@ router.post('/confirm-sign-up', (req,res)=>{
 
 router.post('/login', (req, res) => {
     db.query(
-      `SELECT * FROM users WHERE username = ${db.escape(req.body.username)};`,
+      `SELECT * FROM users WHERE email = ${db.escape(req.body.email)};`,
       (err, result) => {
         // user does not exists
         if (err) {
@@ -111,7 +158,7 @@ router.post('/login', (req, res) => {
   
         if (!result.length) {
           return res.status(401).send({
-            msg: 'Username or password is incorrect!'
+            msg: 'E-mail or password is incorrect!'
           });
         }
 
@@ -127,17 +174,14 @@ router.post('/login', (req, res) => {
           result[0]['password'],
           (bErr, bResult) => {
             // wrong password
-            console.log(result);
             if (bErr) {
-              throw bErr;
               return res.status(401).send({
-                msg: 'Username or password is incorrect!'
+                msg: 'E-mail or password is incorrect!'
               });
             }
   
             if (bResult) {
               const {iduser, username} = result[0]
-              //console.log(iduser, username);
               const token = jwt.sign({
                   username: username,
                   iduser: iduser
@@ -157,7 +201,71 @@ router.post('/login', (req, res) => {
               });
             }
             return res.status(401).send({
-              msg: 'Username or password is incorrect!'
+              msg: 'E-mail or password is incorrect!'
+            });
+          }
+        );
+       }
+    );
+  });
+  router.post('/login-driver', (req, res) => {
+    const {password, employeeid} = req.body;
+    db.query(
+      `SELECT * FROM drivers WHERE employeeid = ${db.escape(employeeid)};`,
+      (err, result) => {
+        // user does not exists
+        if (err) {
+          return res.status(400).send({
+            msg: err
+          });
+        }
+        if (!result.length) {
+          return res.status(401).send({
+            msg: 'Employee ID or password is incorrect!'
+          });
+        }
+
+        if (result[0].validate === '0') {
+          return res.status(401).send({
+            msg: 'Invalid login, require validate login'
+          });
+        }
+  
+        // check password
+        bcrypt.compare(
+          password,
+          result[0]['password'],
+          (bErr, bResult) => {
+            // wrong password
+            console.log(result);
+            if (bErr) {
+              return res.status(401).send({
+                msg: 'Employee ID or password is incorrect!'
+              });
+            }
+  
+            if (bResult) {
+              const {iddrive, email} = result[0];
+              const token = jwt.sign({
+                  email,
+                  iddrive
+                },
+                'SECRETKEY', {
+                  expiresIn: '1d'
+                }
+              );
+  
+              db.query(
+                `UPDATE users SET lastlogin = now() WHERE iduser = '${result[0].iddrive}'`
+              );
+              return res.status(200).send({
+                msg: 'Logged in!',
+                token,
+                user: result[0]
+              });
+            }
+            return res.status(401).send({
+              msg: 'Employee ID or password is incorrect!'
             });
           }
         );
@@ -166,7 +274,26 @@ router.post('/login', (req, res) => {
   });
 
 
-// routes/router.js --testing router
+// Admin
+router.put('/admin-validate-drive', (req,res)=>{
+  
+    const {iddriver} = req.body;
+    db.query(`UPDATE drivers SET validate = ${db.escape('1')} 
+    WHERE iddrive = ${db.escape(iddriver)}`
+    , 
+    function(e, r){
+          if(e) return res.status(401).send({msg: 'error....'});
+          else return res.status(200).send({msg: 'updated....'});
+    });    
+        
+});
+router.get('get-fees', (req, res)=>{
+    db.query(`SELECT * FROM categorys
+              JOIN fees ON fees.idcategory = categorys.idcategory;
+    `, (e, r)=>{
+        if(r.length) return res.status(200).send({info:r})
+    });
+});
 
 router.get('/teste', (req, res, next)=>{
   console.log(req.UserData);
@@ -181,11 +308,11 @@ router.get('/generate-drive-id', (req, res, next)=>{
 
 //bring all users
 router.get('/users',(req,res)=>{
-  db.query(`SELECT * FROM users`, (err, result)=>{
+  db.query(`SELECT username FROM users`, (err, result)=>{
       if(err){
         throw err;
         return res.status(400).send({
-          msg: "error",
+          msg: "error", 
           error : err
         });
       }else{
@@ -249,75 +376,7 @@ router.get('/user-logged', (req,res)=>{
    );
 });
 //update pass word
-
-/*router.put('/update-user', (req,res, next)=>{
-    const {iduser} = req.userData;
-    const {oldpass, password, email, phonenumber, username} = req.body;
-    
-    db.query(
-      `SELECT * FROM users WHERE iduser = ${db.escape(iduser)};`,
-      (err, result) => {
-        // user does not exists
-        if (err) {
-          //throw err;
-          return res.status(400).send({
-            msg: err
-          });
-        }
-        
-        bcrypt.compare(
-          oldpass,
-          result[0]['password'],
-          (bErr, bResult) => {
-            // wrong password
-              if (bErr) {
-              //throw bErr;
-              console.log(bErr);
-              return res.status(401).send({
-                msg: 'Password does not match!'
-              });
-              
-            }else if (bResult) {
-              bcrypt.hash(password, 10, (err, hash)=>{
-                if(err){
-                  return res.status(500).send({
-                    msg: err
-                  });
-                }else{
-                  db.query(`UPDATE users SET password = ${db.escape(hash)}
-                  WHERE iduser = ${db.escape(iduser)}`,
-                (err, result)=>{
-                   if(err){
-                     //throw err;
-                     console.log(err);
-                     return res.status(400).send({
-                        msg: "error",
-                        error : err
-                     });
-                   }else{
-                      return res.status(200).send({
-                        msg: "updated",
-                        data : result[0]
-                      });
-                   }
-                }
-                );
-              }
-              });
-                   
-            }
-            
-          }
-
-        );
-
-       }
-
-    );
-
-});*/
-
-router.put('/update-user', (req, res)=>{
+router.put('/update-user', userMiddleware.validatePassword, (req, res)=>{
     const {iduser, username} = req.userData;
     const {password, oldpass, phonenumber, email} = req.body;
 
@@ -326,26 +385,29 @@ router.put('/update-user', (req, res)=>{
               if(err) return res.status(401).send({msg:'user does not exist'});
               else{
                 if(result.length){
-                  bcrypt.compare(req.body.oldpass, result[0]['password'], (e, r)=>{
+                  bcrypt.compare(oldpass, result[0]['password'], (e, r)=>{
                     if(e) return res.status(401).send({msg:'password does not match', e:e});
-                    else{
+                    if(r){
                         bcrypt.hash(password, 10, (err, hash)=>{
                             if(err) res.status(400).send({msg:err});
                             else{
+                          
                                 db.query(`UPDATE users SET password = ${db.escape(hash)}
                                 WHERE iduser = ${db.escape(iduser)}`,
                                   (qErr,qResult)=>{
                                     if(qResult) res.status(200).send({
-                                        msg :'updated'
+                                        msg :'updated...'
                                     });
                                   }
                                 );
                             }
                         });
-                    }
-                });
+                    }else return res.status(404).send({msg:'password does not match'});
+                  
+                  });
+
                 }
-                else return res.status(401).send({msg:'user not found'})
+                else return res.status(404).send({msg:'user not found'});
               }
           }
     );
@@ -355,17 +417,16 @@ router.put('/update-user', (req, res)=>{
 router.post('/reserve', (req,res)=>{
   const {iduser} = req.userData;
   const {reservefrom, reserveto, reservedate, paymethod, passenger, price, 
-    expectedduration, latitude, longitude, distance} = req.body;
+        expectedduration, distance} = req.body;
   
   db.query(
     `INSERT INTO reserves 
-      (iduser, reservefrom, reserveto, reservedate, paymethod, passenger, price, expectedduration,
-        latitude, longitude, distance)
+      (iduser, reservefrom, reserveto, reservedate, paymethod, passenger, 
+        price, expectedduration, distance)
       VALUES
       (${db.escape(iduser)},${db.escape(reservefrom)},${db.escape(reserveto)},
       ${db.escape(reservedate)},${db.escape(paymethod)},${db.escape(passenger)}
-      ,${db.escape(price)}, ${db.escape(expectedduration)},${db.escape(latitude)},
-      ${db.escape(longitude)}, ${db.escape(distance)})      
+      ,${db.escape(price)}, ${db.escape(expectedduration)},${db.escape(distance)})      
     `,
     (error, result)=>{
       if(error){
@@ -405,14 +466,48 @@ router.post('/reserve', (req,res)=>{
  
 });
 
-router.post('/forget-my-pass', (req,res)=>{
-  const {iduser} = req.body;
-
+router.post('/forget-my-pass-send-code', (req,res)=>{
+  const {iduser} = req.userData;
+  db.query(`SELECT * from users WHERE  iduser =  ${iduser}`,(qe,qr)=>{
+      if(qe) res.status(401).send({msg:'error'});
+      if(qr.length){
+          let cod = emailMiddleware.random();
+          emailMiddleware.sendEmail(qr[0]['email'], cod, 'CÓDIGO DE ALTERAÇÃO DE PASSWORD');
+          if(cod){
+            db.query(`UPDATE users SET confirmcode = ${db.escape(cod)} WHERE iduser = ${db.escape(iduser)}`, function(e, r){
+              if(r) return res.status(200).send({msg: 'updated....'});
+            });
+          }
+          //return res.status(200).send({msg: cod});
+      }else res.status(404).send({msg:'users does not found'}); 
+  });
 });
 
-router.get('/historic-all-reserve', (req, res)=>{
+router.post('/forget-my-pass-change', (req,res)=>{
+      const {iduser} = req.userData;
+      const {confirmecode,password, password_repeat} = req.body;
+      db.query(`SELECT * FROM users WHERE confirmcode = ${db.escape(confirmecode)}`, function(err, result){
+
+        if(err){
+          return res.status(401).send({err});
+        }else if(result.length){
+            bcrypt.hash(password, 10, (err, hash)=>{
+                  if(hash){
+                    db.query(`UPDATE users SET confirmcode = ${db.escape('0')}, password = ${db.escape(hash)}
+                     WHERE iduser = ${db.escape(result[0].iduser)}`, function(e, r){
+                      return res.status(200).send({msg: 'updated....'});
+                    });
+                  }
+            });
+            
+        }else return res.status(404).send({msg:'confirm code does not exist'});
+    });
+});
+
+
+router.get('/historic-all-reserves', (req, res)=>{
     const {iduser} = req.userData;
-    db.query(`SELECT reserves.reservefrom, reserves.reserveto, reserves.reservedate, reserves.iduser,
+    db.query(`SELECT (select JSON_EXTRACT(reserves.reservefrom, '$[0]')) as reservefrom, (select JSON_EXTRACT(reserves.reserveto, '$[0]')) as reserveto, reserves.reservedate, reserves.iduser,
     reserves.passenger, reserves.expectedduration, reserves.price,
     historics.idreservein, historics.status, historics.way
     FROM  historics
@@ -428,19 +523,19 @@ router.get('/historic-all-reserve', (req, res)=>{
 
           }else{
             if(result.length){
-              console.log(result);
               let info =[];
               for(let i = 0; i< result.length; i++){
                 result[i]['status'] === '0' ? result[i]['status'] = 'Cancelado' : result[i]['status'] = 'Realizado';
-
+                result[i]['reservefrom'] = JSON.parse(result[i]['reservefrom']);
+                result[i]['reserveto'] = JSON.parse(result[i]['reserveto']);
                 info.push(result[i]);
               }
-              return res.status(200).send({
-                info
-              });
+            
+              return res.status(200).json(info);
+              
             }else{
-              return res.status(200).send({
-                msg: 'this user doesn´t have reserve!',
+              return res.status(404).send({
+                msg: 'this user does not have reserve!',
                 iduser
               })
             }  
@@ -449,11 +544,11 @@ router.get('/historic-all-reserve', (req, res)=>{
     );
 });
 
-router.get('/historic-canceled-reserve', (req, res)=>{
+router.get('/historic-canceled-reserves', (req, res)=>{
   const {iduser} = req.userData;
 
   db.query(
-    `SELECT reserves.reservefrom, reserves.reserveto, reserves.reservedate, reserves.iduser,
+    `SELECT (select JSON_EXTRACT(reserves.reservefrom, '$[0]')) as reservefrom, (select JSON_EXTRACT(reserves.reserveto, '$[0]')) as reserveto, reserves.iduser,
     reserves.passenger, reserves.expectedduration, reserves.price,
     historics.idreservein, historics.status, historics.way
     FROM  historics
@@ -472,14 +567,14 @@ router.get('/historic-canceled-reserve', (req, res)=>{
             let info =[];
             for(let i = 0; i< result.length; i++){
               result[i]['status'] === '0' ? result[i]['status'] = 'cancelado' : result[i]['status'] = 'concluído';
+              result[i]['reservefrom'] = JSON.parse(result[i]['reservefrom']);
+              result[i]['reserveto'] = JSON.parse(result[i]['reserveto']);
               info.push(result[i]);
             }
-            return res.status(200).send({
-              info
-            });
+            return res.status(200).json(info);
           }else{
-            return res.status(200).send({
-              msg: 'this user doesn´t have canceled reserve!',
+            return res.status(404).send({
+              msg: 'this user does not have canceled reserve!',
               iduser
             })
           }          
@@ -493,7 +588,7 @@ router.get('/my-reserves', (req, res)=>{
   const {iduser} = req.userData;
 
   db.query(
-    `SELECT * FROM reserves WHERE iduser = 6 AND status = '1' AND reservedate >  date(now());
+    `SELECT * FROM reserves WHERE iduser = ${iduser} AND status = '1' AND reservedate >  date(now());
     `,
     (error, result)=>{
       if(error){
@@ -506,15 +601,14 @@ router.get('/my-reserves', (req, res)=>{
           if(result.length){
             let info =[];
             for(let i = 0; i< result.length; i++){
-              //result[i]['status'] === '0' ? result[i]['status'] = 'cancelado' : result[i]['status'] = 'concluído';
               info.push(result[i]);
+              result[i]['reservefrom'] = JSON.parse(result[i]['reservefrom']);
+              result[i]['reserveto'] = JSON.parse(result[i]['reserveto']);
             }
-            return res.status(200).send({
-              info
-            });
+            return res.status(200).json(info);
           }else{
-            return res.status(200).send({
-              msg: 'this user doesn´t have reserve!',
+            return res.status(404).send({
+              msg: 'this user does not have reserve!',
               iduser
             })
           }          
@@ -524,7 +618,7 @@ router.get('/my-reserves', (req, res)=>{
 
 
 });
-router.get('/historic-done-reserve', (req, res)=>{
+router.get('/historic-done-reserves', (req, res)=>{
   const {iduser} = req.userData;
 
   db.query(
@@ -546,15 +640,17 @@ router.get('/historic-done-reserve', (req, res)=>{
           if(result.length){
             let info =[];
             for(let i = 0; i< result.length; i++){
-              result[i]['status'] === '0' ? result[i]['status'] = 'cancelado' : result[i]['status'] = 'concluído';
+              result[i]['status'] === '0' ? result[i]['status'] = 'cancelado' : result[i]['status'] = 'Realizado';
+              result[i]['reservefrom'] = JSON.parse(result[i]['reservefrom']);
+              result[i]['reserveto'] = JSON.parse(result[i]['reserveto']);
               info.push(result[i]);
             }
             return res.status(200).send({
               info
             });
           }else{
-            return res.status(200).send({
-              msg: 'this user doesn´t have done reserve!',
+            return res.status(404).send({
+              msg: 'this user does not have done reserve!',
               iduser
             })
           }          
@@ -592,7 +688,7 @@ router.post('/cancel-reserve', (req,res)=>{
             
           }else{
             console.log(err);
-            return res.status(401).send({msg:'empty...'});
+            return res.status(404).send({msg:'empty...'});
           }
 
         });
@@ -628,7 +724,7 @@ router.post('/cancel-reserve-retracting', (req,res)=>{
             
           }else{
             console.log(err);
-            return res.status(401).send({msg:'empty...'});
+            return res.status(404).send({msg:'empty...'});
           }
 
         });
@@ -640,7 +736,7 @@ router.post('/cancel-reserve-retracting', (req,res)=>{
 router.put('/finishing-drive', (req,res)=>{
   
   const {reservecode} = req.body;
-  const {iduser} = req.userData;
+  const {iddriver} = req.userData;
     db.query(`UPDATE drives SET status = ${db.escape('2')} 
     WHERE idreserve = ${db.escape(reservecode)}`
     , 
@@ -655,17 +751,17 @@ router.post('/confirm-drive', (req, res)=>{
    
   const {iduser} = req.userData;
   const {reservefrom, reserveto, reservedate, paymethod, passenger, price, 
-    expectedduration, latitude, longitude, distance} = req.body;
+    expectedduration, distance} = req.body;
   
   db.query(
     `INSERT INTO reserves 
-      (iduser, reservefrom, reserveto, reservedate, paymethod, passenger, price, expectedduration,
-        latitude, longitude, distance, status)
+      (iduser, reservefrom, reserveto, reservedate, paymethod, passenger, price, 
+        expectedduration, distance, status)
       VALUES
       (${db.escape(iduser)},${db.escape(reservefrom)},${db.escape(reserveto)},
       now(),${db.escape(paymethod)},${db.escape(passenger)}
-      ,${db.escape(price)}, ${db.escape(expectedduration)},${db.escape(latitude)},
-      ${db.escape(longitude)}, ${db.escape(distance)}, ${db.escape('2')})      
+      ,${db.escape(price)}, ${db.escape(expectedduration)},
+      ${db.escape(distance)}, ${db.escape('2')})      
     `,
     (error, result)=>{
       if(error){
@@ -691,7 +787,7 @@ router.post('/confirm-drive', (req, res)=>{
 router.post('/drive-in-course', (req,res)=>{
 
   const reservecode = req.body.idreserve;
-  const {iduser} = req.userData;
+  const {iddriver} = req.userData;
     db.query(`UPDATE drives SET status = ${db.escape('1')} 
     WHERE idreserve = ${db.escape(reservecode)}`
     , 
@@ -707,7 +803,68 @@ router.post('/drive-retracting', (req, res)=>{
     
 });
 
+router.get('/driver-statics',(req, res)=>{
+  /*1-dia; 2-mes; 3-ano */
+    const {date, option} = req.body;
+    const {iddriver} = req.userData;
+    if(option == '1'){
+      db.query(`SELECT drivers.username AS drivename,SUM(reserves.price) AS total FROM drives 
+      JOIN reserves on reserves.idreserve = drives.idreserve
+      JOIN drivers on  drivers.iddriver = drives.iddriver
+      WHERE drives.iddriver = ${db.escape(iduser)} AND drives.status = ${db.escape('2')} AND 
+      DATE(reserves.reservedate) = DATE(${db.escape(date)})
+      GROUP BY drives.iddriver;`, (e, r)=>{
+        if(e) return res.status(401).send({msg:'check the date format and try to insert again'});
+        else if(r.length) return res.status(200).send({info:r}); 
+        else res.status(404).send({msg:'this user does not have statistic'});
+      });
+    }else if(option == '2'){
+      db.query(`SELECT drivers.username AS drivename,SUM(reserves.price) AS total FROM drives 
+      JOIN reserves on reserves.idreserve = drives.idreserve
+      JOIN drivers on  drivers.iddriver = drives.iddriver
+      WHERE drives.iddriver = ${db.escape(iduser)} AND drives.status = ${db.escape('2')} AND 
+      MONTH(reserves.reservedate) = MONTH(${db.escape(date)})
+      GROUP BY drives.iddriver;`, (e, r)=>{
+        if(e) return res.status(401).send({msg:'check the date format and try to insert again'});
+        else if(r.length) return res.status(200).send({info:r}); 
+        else res.status(404).send({msg:'this user does not have statistic'});
+      });
+    }else{
+      db.query(`SELECT drivers.username AS drivename,SUM(reserves.price) AS total FROM drives 
+      JOIN reserves on reserves.idreserve = drives.idreserve
+      JOIN drivers on  drivers.iddriver = drives.iddriver
+      WHERE drives.iddriver = ${db.escape(iduser)} AND drives.status = ${db.escape('2')} AND 
+      YEAR(reserves.reservedate) = YEAR(${db.escape(date)})
+      GROUP BY drives.iddriver;`, (e, r)=>{
+        if(e) return res.status(401).send({msg:'check the date format and try to insert again'});
+        else if(r.length) return res.status(200).send({info:r}); 
+        else res.status(404).send({msg:'this user does not have statistic'});
+      });
+    }
+    
+});
 
+router.get('/driver-historic-done-reserve', (req, res)=>{
+    const {iddriver} = req.userData;
+    db.query(`SELECT drivers.username AS driver,reserves.reservefrom, reserves.reserveto, historics.status, historics.way, users.username AS passanger 
+    FROM historics 
+    JOIN drives ON drives.idreserve = historics.idreservein
+    JOIN drivers ON drivers.iddriver = drives.iddriver
+    JOIN reserves ON reserves.idreserve = historics.idreservein
+    JOIN users ON users.iduser = reserves.iduser
+    WHERE historics.status = ${db.escape('1')} AND drivers.iddriver = ${db.escape(iduser)} ;`, 
+    (e, r)=>{
+        if(e) return res.status(401).send({msg:`erro${e}`});
+        else if(r.length){
+          let info =[];
+          for(let i =0; i<r.length; i++){
+              r[i]['status'] === '0' ? r[i]['status'] = 'cancelado' : r[i]['status'] = 'Realizado';
+              info.push(r[i]); 
+          }
+           return res.status(200).send({info});
+        }else return res.status(404).send({msg:'this user does not have done drives'});
+    });
+});
 
 //exporting module rout
 module.exports = router;

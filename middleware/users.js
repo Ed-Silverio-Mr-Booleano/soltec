@@ -28,6 +28,25 @@ module.exports = {
   
       next();
     },
+    validatePassword:(req, res, next)=>{
+      if (!req.body.password || req.body.password.length < 6) {
+        return res.status(400).send({
+          msg: 'Please enter a password with min. 6 chars'
+        });
+      }
+  
+      // password (repeat) does not match
+      if (
+        !req.body.password_repeat ||
+        req.body.password != req.body.password_repeat
+      ) {
+        return res.status(400).send({
+          msg: 'Both passwords must match'
+        });
+      }
+  
+      next();
+    },
     isLoggedIn: (req, res, next) => {
       
       const authHeader = req.headers.authorization;
@@ -46,9 +65,7 @@ module.exports = {
           token,
           'SECRETKEY'
         );
-        //console.log(decoded);
         req.userData = decoded;
-        console.log(decoded);
         next();
       } catch (err) {
         //console.log(err);
