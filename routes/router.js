@@ -416,8 +416,10 @@ router.put('/update-user', userMiddleware.validatePassword, (req, res)=>{
 
 router.post('/reserve', (req,res)=>{
   const {iduser} = req.userData;
-  const {reservefrom, reserveto, reservedate, paymethod, passenger, price, 
+  let {reservefrom, reserveto, reservedate, paymethod, passenger, price, 
         expectedduration, distance} = req.body;
+        reservefrom = JSON.stringify(reservefrom);
+        reserveto = JSON.stringify(reserveto);
   
   db.query(
     `INSERT INTO reserves 
@@ -451,8 +453,6 @@ router.post('/reserve', (req,res)=>{
             date: reservedate,
             from: reservefrom,
             to: reserveto,
-            latitude: latitude,
-            longitude: longitude,
             passenger: passenger,
             distance: distance,
             price: price,
