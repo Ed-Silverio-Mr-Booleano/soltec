@@ -310,7 +310,6 @@ router.get('/generate-drive-id', (req, res, next)=>{
 router.get('/users',(req,res)=>{
   db.query(`SELECT username FROM users`, (err, result)=>{
       if(err){
-        throw err;
         return res.status(400).send({
           msg: "error", 
           error : err
@@ -361,7 +360,6 @@ router.get('/user-logged', (req,res)=>{
    db.query(`SELECT * FROM users where iduser = ${db.escape(iduser)} `,
       (err, result)=>{
           if(err){
-            throw err;
             return res.status(400).send({
               msg: err
             });
@@ -398,9 +396,9 @@ router.get('/my-staff', (req, res)=>{
 });
 
 //update pass word
-router.put('/update-user', userMiddleware.validatePassword, (req, res)=>{
-    const {iduser, username} = req.userData;
-    const {password, oldpass, phonenumber, email} = req.body;
+router.put('/update-user', (req, res)=>{
+    const {iduser} = req.userData;
+    const {password_repeat, password, oldpass, phonenumber, email} = req.body;
 
     db.query(`SELECT * FROM users WHERE iduser = ${db.escape(iduser)};`,
           (err, result)=>{
@@ -410,26 +408,41 @@ router.put('/update-user', userMiddleware.validatePassword, (req, res)=>{
                   bcrypt.compare(oldpass, result[0]['password'], (e, r)=>{
                     if(e) return res.status(401).send({msg:'password does not match', e:e});
                     if(r){
+                      if (password_repeat && password){
                         bcrypt.hash(password, 10, (err, hash)=>{
-                            if(err) res.status(400).send({msg:err});
-                            else{
-                          
-                                db.query(`UPDATE users SET password = ${db.escape(hash)}
-                                WHERE iduser = ${db.escape(iduser)}`,
-                                  (qErr,qResult)=>{
-                                    if(qResult) res.status(200).send({
-                                        msg :'updated...'
-                                    });
-                                  }
-                                );
-                            }
+                          if(err) res.status(400).send({msg:err});
+                          else{
+                                console.log("Dados: ", phonenumber, email);
+                              db.query(`UPDATE users SET password = ${db.escape(hash)},
+                                    phonenumber = ${db.escape(phonenumber)},
+                                    email = ${db.escape(email)}
+                                    WHERE iduser = ${db.escape(iduser)}`,
+                                (qErr,qResult)=>{
+                                  if(qResult) res.status(200).send({
+                                      msg :'updated... all'
+                                  });
+                                });
+                          }
                         });
-                    }else return res.status(404).send({msg:'password does not match'});
+                      }else{
+                        console.log("Dados: ", phonenumber, email);
+                        db.query(`UPDATE users SET
+                        phonenumber = ${db.escape(phonenumber)},
+                        email = ${db.escape(email)}
+                        WHERE iduser = ${db.escape(iduser)}`,
+                        (qErr,qResult)=>{
+                          if(qResult) res.status(200).send({
+                          msg :'updated... some'
+                          });
+                        });
+                      }
+                        
+                    }else return res.status(200).send({msg:'password does not match'});
                   
                   });
 
                 }
-                else return res.status(404).send({msg:'user not found'});
+                else return res.status(200).send({msg:'user not found'});
               }
           }
     );
@@ -454,7 +467,6 @@ router.post('/reserve', (req,res)=>{
     `,
     (error, result)=>{
       if(error){
-        throw error;
         return res.status(400).send({
           msg: "error",
           error : err
@@ -501,7 +513,7 @@ router.post('/forget-my-pass-send-code', (req,res)=>{
             });
           }
           //return res.status(200).send({msg: cod});
-      }else res.status(404).send({msg:'users does not found'}); 
+      }else res.status(200).send({msg:'users does not found'}); 
   });
 });
 
@@ -522,7 +534,7 @@ router.post('/forget-my-pass-change', (req,res)=>{
                   }
             });
             
-        }else return res.status(404).send({msg:'confirm code does not exist'});
+        }else return res.status(200).send({msg:'confirm code does not exist'});
     });
 });
 
@@ -556,7 +568,7 @@ router.get('/historic-all-reserves', (req, res)=>{
               return res.status(200).json(info);
               
             }else{
-              return res.status(404).send({
+              return res.status(200).send({
                 msg: 'this user does not have reserve!',
                 iduser
               })
@@ -579,7 +591,6 @@ router.get('/historic-canceled-reserves', (req, res)=>{
     `,
     (error, result)=>{
       if(error){
-        throw error;
         return res.status(400).send({
           msg: "error",
           error : err
@@ -595,7 +606,7 @@ router.get('/historic-canceled-reserves', (req, res)=>{
             }
             return res.status(200).json(info);
           }else{
-            return res.status(404).send({
+            return res.status(200).send({
               msg: 'this user does not have canceled reserve!',
               iduser
             })
@@ -614,7 +625,6 @@ router.get('/my-reserves', (req, res)=>{
     `,
     (error, result)=>{
       if(error){
-        throw error;
         return res.status(400).send({
           msg: "error",
           error : err
@@ -629,7 +639,7 @@ router.get('/my-reserves', (req, res)=>{
             }
             return res.status(200).json(info);
           }else{
-            return res.status(404).send({
+            return res.status(200).send({
               msg: 'this user does not have reserve!',
               iduser
             })
@@ -653,7 +663,6 @@ router.get('/historic-done-reserves', (req, res)=>{
     `,
     (error, result)=>{
       if(error){
-        throw error;
         return res.status(400).send({
           msg: "error",
           error : err
@@ -671,7 +680,7 @@ router.get('/historic-done-reserves', (req, res)=>{
               info
             });
           }else{
-            return res.status(404).send({
+            return res.status(200).send({
               msg: 'this user does not have done reserve!',
               iduser
             })
@@ -710,7 +719,7 @@ router.post('/cancel-reserve', (req,res)=>{
             
           }else{
             console.log(err);
-            return res.status(404).send({msg:'empty...'});
+            return res.status(200).send({msg:'empty...'});
           }
 
         });
@@ -746,7 +755,7 @@ router.post('/cancel-reserve-retracting', (req,res)=>{
             
           }else{
             console.log(err);
-            return res.status(404).send({msg:'empty...'});
+            return res.status(200).send({msg:'empty...'});
           }
 
         });
@@ -840,7 +849,7 @@ router.get('/driver-statics',(req, res)=>{
       GROUP BY drives.iddriver;`, (e, r)=>{
         if(e) return res.status(401).send({msg:'check the date format and try to insert again'});
         else if(r.length) return res.status(200).send({info:r}); 
-        else res.status(404).send({msg:'this user does not have statistic'});
+        else res.status(200).send({msg:'this user does not have statistic'});
       });
     }else if(option == '2'){
       db.query(`SELECT drivers.username AS drivename,SUM(reserves.price) AS total FROM drives 
@@ -851,7 +860,7 @@ router.get('/driver-statics',(req, res)=>{
       GROUP BY drives.iddriver;`, (e, r)=>{
         if(e) return res.status(401).send({msg:'check the date format and try to insert again'});
         else if(r.length) return res.status(200).send({info:r}); 
-        else res.status(404).send({msg:'this user does not have statistic'});
+        else res.status(200).send({msg:'this user does not have statistic'});
       });
     }else{
       db.query(`SELECT drivers.username AS drivename,SUM(reserves.price) AS total FROM drives 
@@ -862,7 +871,7 @@ router.get('/driver-statics',(req, res)=>{
       GROUP BY drives.iddriver;`, (e, r)=>{
         if(e) return res.status(401).send({msg:'check the date format and try to insert again'});
         else if(r.length) return res.status(200).send({info:r}); 
-        else res.status(404).send({msg:'this user does not have statistic'});
+        else res.status(200).send({msg:'this user does not have statistic'});
       });
     }
     
@@ -886,7 +895,7 @@ router.get('/driver-historic-done-reserve', (req, res)=>{
               info.push(r[i]); 
           }
            return res.status(200).send({info});
-        }else return res.status(404).send({msg:'this user does not have done drives'});
+        }else return res.status(200).send({msg:'this user does not have done drives'});
     });
 });
 
