@@ -1,6 +1,6 @@
 module.exports = {
     
-    sendEmail:(eReceptor, random, subj= 'CÓDIGO DE CONFIRMAÇÃO')=>{
+    sendEmail:(eReceptor, random, subj = 'CÓDIGO DE CONFIRMAÇÃO')=>{
 
         const nodemailer = require('nodemailer');
 

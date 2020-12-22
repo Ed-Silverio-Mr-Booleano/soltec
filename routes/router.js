@@ -305,6 +305,45 @@ router.get('/generate-drive-id', (req, res, next)=>{
     let id = emailMiddleware.random();
     res.send({msg:'id driver generated with sucess', id:id});
 });
+//forget pass
+
+router.post('/forget-my-pass-send-code', (req,res)=>{
+  const {iduser} = req.userData;
+  db.query(`SELECT * from users WHERE  iduser =  ${iduser}`,(qe,qr)=>{
+      if(qe) res.status(401).send({msg:'error'});
+      if(qr.length){
+          let cod = emailMiddleware.random();
+          emailMiddleware.sendEmail(qr[0]['email'], cod, 'CÓDIGO DE ALTERAÇÃO DE PASSWORD');
+          if(cod){
+            db.query(`UPDATE users SET confirmcode = ${db.escape(cod)} WHERE iduser = ${db.escape(iduser)}`, function(e, r){
+              if(r) return res.status(200).send({msg: 'updated....'});
+            });
+          }
+          //return res.status(200).send({msg: cod});
+      }else res.status(200).send({msg:'users does not found'}); 
+  });
+});
+
+router.post('/forget-my-pass-change', (req,res)=>{
+      const {iduser} = req.userData;
+      const {confirmecode,password, password_repeat} = req.body;
+      db.query(`SELECT * FROM users WHERE confirmcode = ${db.escape(confirmecode)}`, function(err, result){
+
+        if(err){
+          return res.status(401).send({err});
+        }else if(result.length){
+            bcrypt.hash(password, 10, (err, hash)=>{
+                  if(hash){
+                    db.query(`UPDATE users SET confirmcode = ${db.escape('0')}, password = ${db.escape(hash)}
+                     WHERE iduser = ${db.escape(result[0].iduser)}`, function(e, r){
+                      return res.status(200).send({msg: 'updated....'});
+                    });
+                  }
+            });
+            
+        }else return res.status(200).send({msg:'confirm code does not exist'});
+    });
+});
 
 //bring all users
 router.get('/users',(req,res)=>{
@@ -397,9 +436,10 @@ router.get('/my-staff', (req, res)=>{
 
 //update pass word
 router.put('/update-user', (req, res)=>{
-    const {iduser} = req.userData;
+    const {iduser, username} = req.userData;
     const {password_repeat, password, oldpass, phonenumber, email} = req.body;
-
+    const authHeader = req.headers.authorization;
+    const token = authHeader.split(' ')[1];
     db.query(`SELECT * FROM users WHERE iduser = ${db.escape(iduser)};`,
           (err, result)=>{
               if(err) return res.status(401).send({msg:'user does not exist'});
@@ -412,27 +452,40 @@ router.put('/update-user', (req, res)=>{
                         bcrypt.hash(password, 10, (err, hash)=>{
                           if(err) res.status(400).send({msg:err});
                           else{
-                                console.log("Dados: ", phonenumber, email);
+                              
                               db.query(`UPDATE users SET password = ${db.escape(hash)},
                                     phonenumber = ${db.escape(phonenumber)},
                                     email = ${db.escape(email)}
                                     WHERE iduser = ${db.escape(iduser)}`,
                                 (qErr,qResult)=>{
                                   if(qResult) res.status(200).send({
-                                      msg :'updated... all'
+                                      msg:'user updated',
+                                      token: token,
+                                      user:{
+                                        iduser,
+                                        username,
+                                        email,
+                                        phonenumber
+                                      }
                                   });
                                 });
                           }
                         });
                       }else{
-                        console.log("Dados: ", phonenumber, email);
                         db.query(`UPDATE users SET
                         phonenumber = ${db.escape(phonenumber)},
                         email = ${db.escape(email)}
                         WHERE iduser = ${db.escape(iduser)}`,
                         (qErr,qResult)=>{
                           if(qResult) res.status(200).send({
-                          msg :'updated... some'
+                            msg:'user updated',
+                            token: token,
+                            user:{
+                              iduser,
+                              username,
+                              email,
+                              phonenumber
+                            }
                           });
                         });
                       }
@@ -500,45 +553,9 @@ router.post('/reserve', (req,res)=>{
  
 });
 
-router.post('/forget-my-pass-send-code', (req,res)=>{
-  const {iduser} = req.userData;
-  db.query(`SELECT * from users WHERE  iduser =  ${iduser}`,(qe,qr)=>{
-      if(qe) res.status(401).send({msg:'error'});
-      if(qr.length){
-          let cod = emailMiddleware.random();
-          emailMiddleware.sendEmail(qr[0]['email'], cod, 'CÓDIGO DE ALTERAÇÃO DE PASSWORD');
-          if(cod){
-            db.query(`UPDATE users SET confirmcode = ${db.escape(cod)} WHERE iduser = ${db.escape(iduser)}`, function(e, r){
-              if(r) return res.status(200).send({msg: 'updated....'});
-            });
-          }
-          //return res.status(200).send({msg: cod});
-      }else res.status(200).send({msg:'users does not found'}); 
-  });
-});
-
-router.post('/forget-my-pass-change', (req,res)=>{
-      const {iduser} = req.userData;
-      const {confirmecode,password, password_repeat} = req.body;
-      db.query(`SELECT * FROM users WHERE confirmcode = ${db.escape(confirmecode)}`, function(err, result){
-
-        if(err){
-          return res.status(401).send({err});
-        }else if(result.length){
-            bcrypt.hash(password, 10, (err, hash)=>{
-                  if(hash){
-                    db.query(`UPDATE users SET confirmcode = ${db.escape('0')}, password = ${db.escape(hash)}
-                     WHERE iduser = ${db.escape(result[0].iduser)}`, function(e, r){
-                      return res.status(200).send({msg: 'updated....'});
-                    });
-                  }
-            });
-            
-        }else return res.status(200).send({msg:'confirm code does not exist'});
-    });
-});
 
 
+/*historics*/
 router.get('/historic-all-reserves', (req, res)=>{
     const {iduser} = req.userData;
     db.query(`SELECT (select JSON_EXTRACT(reserves.reservefrom, '$[0]')) as reservefrom, (select JSON_EXTRACT(reserves.reserveto, '$[0]')) as reserveto, reserves.reservedate, reserves.iduser,
