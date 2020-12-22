@@ -292,6 +292,7 @@ router.get('get-fees', (req, res)=>{
               JOIN fees ON fees.idcategory = categorys.idcategory;
     `, (e, r)=>{
         if(r.length) return res.status(200).send({info:r})
+        else return res.status(200).send({msg:'empty...'});
     });
 });
 
@@ -489,7 +490,7 @@ router.put('/update-user', (req, res)=>{
                         });
                       }
                         
-                    }else return res.status(200).send({msg:'password does not match'});
+                    }else return res.status(401).send({msg:'password does not match'});
                   
                   });
 
