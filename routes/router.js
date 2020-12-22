@@ -308,8 +308,8 @@ router.get('/generate-drive-id', (req, res, next)=>{
 //forget pass
 
 router.post('/forget-my-pass-send-code', (req,res)=>{
-  const {iduser} = req.userData;
-  db.query(`SELECT * from users WHERE  iduser =  ${iduser}`,(qe,qr)=>{
+  const {email, username} = req.userData;
+  db.query(`SELECT * FROM users WHERE  email =  ${db.escape(email)} OR username = ${db.escape(username)}`,(qe,qr)=>{
       if(qe) res.status(401).send({msg:'error'});
       if(qr.length){
           let cod = emailMiddleware.random();
@@ -324,8 +324,7 @@ router.post('/forget-my-pass-send-code', (req,res)=>{
   });
 });
 
-router.post('/forget-my-pass-change', (req,res)=>{
-      const {iduser} = req.userData;
+router.post('/forget-my-pass-change', userMiddleware.validatePassword, (req,res)=>{
       const {confirmecode,password, password_repeat} = req.body;
       db.query(`SELECT * FROM users WHERE confirmcode = ${db.escape(confirmecode)}`, function(err, result){
 
