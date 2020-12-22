@@ -296,7 +296,7 @@ router.get('get-fees', (req, res)=>{
 });
 
 router.get('/teste', (req, res, next)=>{
-  console.log(req.UserData);
+  console.log(req.userData);
   res.send({msg: 'Css'});
 });
 
@@ -375,6 +375,28 @@ router.get('/user-logged', (req,res)=>{
       }
    );
 });
+
+//mystaff
+
+router.get('/my-staff', (req, res)=>{
+    const {iduser} = req.userData;
+    db.query(`SELECT iduser, username, email, fotoname, phonenumber from users 
+              WHERE invitationcode = (SELECT codeforinvitation FROM users 
+              WHERE iduser = ${db.escape(iduser)});`,
+      (err, result)=>{
+          if(err) res.status(500).send({err})
+          if(result.length){
+            let info = [];
+            for(let i = 0; i<result.length; i++){
+                info.push(result[i]);
+            }
+            res.status(200).json(info);
+          } 
+          else res.status(200).send({msg: 'this users does not have staff yet'});
+      }
+    );
+});
+
 //update pass word
 router.put('/update-user', userMiddleware.validatePassword, (req, res)=>{
     const {iduser, username} = req.userData;
@@ -750,8 +772,11 @@ router.put('/finishing-drive', (req,res)=>{
 router.post('/confirm-drive', (req, res)=>{
    
   const {iduser} = req.userData;
-  const {reservefrom, reserveto, reservedate, paymethod, passenger, price, 
+  let {reservefrom, reserveto, reservedate, paymethod, passenger, price, 
     expectedduration, distance} = req.body;
+
+    reservefrom = JSON.stringify(reservefrom);
+    reserveto = JSON.stringify(reserveto);
   
   db.query(
     `INSERT INTO reserves 
@@ -765,13 +790,12 @@ router.post('/confirm-drive', (req, res)=>{
     `,
     (error, result)=>{
       if(error){
-        throw error;
         return res.status(400).send({
           msg: "error",
           error : err
        });
       }else{
-          return res.status(401).send({
+          return res.status(200).send({
             msg: 'Reserve done!',
             date: reservedate,
             form: reservefrom,
