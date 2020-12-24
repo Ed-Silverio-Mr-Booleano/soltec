@@ -9,12 +9,30 @@ const jwt = require('jsonwebtoken');
 const db = require('../libs/db.js');
 const userMiddleware = require('../middleware/users.js');
 const emailMiddleware = require('../middleware/email.js');
-const email = require('../middleware/email.js');
+const smsMiddleware = require('../middleware/sms.js');
 const { random } = require('../middleware/email.js');
+
+
+
+
 // routes/router.js
 
 //socket.io
 
+function sms(){
+axios.post(`http://52.30.114.86:8080/mimosms/v1/message/send?token=0b87022483b178a41242f2e6b6521542945989920`,{ sender: 'CallTaxi', recipients:'944191230', text:'Testando Server point' } ,config)
+.then(function(response){
+  console.log("surviving....");
+  console.log(response.data)
+})
+  .catch((err) => {
+        console.error("ops! ocorreu um erro" + err);
+  });
+}
+router.post('/sms',(req, res)=>{
+  sms();
+ res.status(200).send({msg: 'entrou na rota'});
+});
 
 router.post('/sign-up',userMiddleware.validateRegister, (req, res) => {
     db.query(
@@ -36,10 +54,11 @@ router.post('/sign-up',userMiddleware.validateRegister, (req, res) => {
             } else {
               let cod = emailMiddleware.random();
               emailMiddleware.sendEmail(req.body.email, cod);
+              smsMiddleware.sendSMS(req.body.phonenumber, cod);
               db.query(
-                `INSERT INTO users (username, password, registred, email, confirmcode, codeforinvitation) VALUES (${db.escape(
+                `INSERT INTO users (username, password, registred, email, confirmcode, codeforinvitation, phonenumber) VALUES (${db.escape(
                   req.body.username
-                )}, ${db.escape(hash)}, now(), ${db.escape(req.body.email)}, ${db.escape(cod)}, ${db.escape(cod)}  )`,
+                )}, ${db.escape(hash)}, now(), ${db.escape(req.body.email)}, ${db.escape(cod)}, ${db.escape(cod)},${db.escape(req.body.phonenumber)})`,
                 (err, result) => {
                   if (err) {
                     throw err;
@@ -377,7 +396,7 @@ router.post('/get-message', (req, res, next)=>{
                 console.log(messages);
                 res.status(200).json(messages);
             }else{
-              res.status(200).json({msg:'have no message'});
+              res.status(204).json({msg:'have no message'});
             }
         }
         
@@ -429,7 +448,7 @@ router.get('/my-staff', (req, res)=>{
             }
             res.status(200).json(info);
           } 
-          else res.status(200).send({msg: 'this users does not have staff yet'});
+          else res.status(204).send({msg: 'this users does not have staff yet'});
       }
     );
 });
@@ -495,7 +514,7 @@ router.put('/update-user', (req, res)=>{
                   });
 
                 }
-                else return res.status(200).send({msg:'user not found'});
+                else return res.status(204).send({msg:'user not found'});
               }
           }
     );
@@ -585,7 +604,7 @@ router.get('/historic-all-reserves', (req, res)=>{
               return res.status(200).json(info);
               
             }else{
-              return res.status(200).send({
+              return res.status(204).send({
                 msg: 'this user does not have reserve!',
                 iduser
               })
@@ -623,7 +642,7 @@ router.get('/historic-canceled-reserves', (req, res)=>{
             }
             return res.status(200).json(info);
           }else{
-            return res.status(200).send({
+            return res.status(204).send({
               msg: 'this user does not have canceled reserve!',
               iduser
             })
@@ -656,7 +675,7 @@ router.get('/my-reserves', (req, res)=>{
             }
             return res.status(200).json(info);
           }else{
-            return res.status(200).send({
+            return res.status(204).send({
               msg: 'this user does not have reserve!',
               iduser
             })
@@ -697,7 +716,7 @@ router.get('/historic-done-reserves', (req, res)=>{
               info
             });
           }else{
-            return res.status(200).send({
+            return res.status(204).send({
               msg: 'this user does not have done reserve!',
               iduser
             })
@@ -736,7 +755,7 @@ router.post('/cancel-reserve', (req,res)=>{
             
           }else{
             console.log(err);
-            return res.status(200).send({msg:'empty...'});
+            return res.status(204).send({msg:'empty...'});
           }
 
         });
@@ -772,7 +791,7 @@ router.post('/cancel-reserve-retracting', (req,res)=>{
             
           }else{
             console.log(err);
-            return res.status(200).send({msg:'empty...'});
+            return res.status(204).send({msg:'empty...'});
           }
 
         });
@@ -866,7 +885,7 @@ router.get('/driver-statics',(req, res)=>{
       GROUP BY drives.iddriver;`, (e, r)=>{
         if(e) return res.status(401).send({msg:'check the date format and try to insert again'});
         else if(r.length) return res.status(200).send({info:r}); 
-        else res.status(200).send({msg:'this user does not have statistic'});
+        else res.status(204).send({msg:'this user does not have statistic'});
       });
     }else if(option == '2'){
       db.query(`SELECT drivers.username AS drivename,SUM(reserves.price) AS total FROM drives 
@@ -877,7 +896,7 @@ router.get('/driver-statics',(req, res)=>{
       GROUP BY drives.iddriver;`, (e, r)=>{
         if(e) return res.status(401).send({msg:'check the date format and try to insert again'});
         else if(r.length) return res.status(200).send({info:r}); 
-        else res.status(200).send({msg:'this user does not have statistic'});
+        else res.status(204).send({msg:'this user does not have statistic'});
       });
     }else{
       db.query(`SELECT drivers.username AS drivename,SUM(reserves.price) AS total FROM drives 
@@ -888,7 +907,7 @@ router.get('/driver-statics',(req, res)=>{
       GROUP BY drives.iddriver;`, (e, r)=>{
         if(e) return res.status(401).send({msg:'check the date format and try to insert again'});
         else if(r.length) return res.status(200).send({info:r}); 
-        else res.status(200).send({msg:'this user does not have statistic'});
+        else res.status(204).send({msg:'this user does not have statistic'});
       });
     }
     
@@ -912,7 +931,7 @@ router.get('/driver-historic-done-reserve', (req, res)=>{
               info.push(r[i]); 
           }
            return res.status(200).send({info});
-        }else return res.status(200).send({msg:'this user does not have done drives'});
+        }else return res.status(204).send({msg:'this user does not have done drives'});
     });
 });
 
