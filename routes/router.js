@@ -37,8 +37,9 @@ router.post('/sms',(req, res)=>{
 router.post('/sign-up',userMiddleware.validateRegister, (req, res) => {
     db.query(
       `SELECT * FROM users WHERE LOWER(email) = LOWER(${db.escape(
-        req.body.email
-      )});`,
+        req.body.email)}) OR LOWER(username) = LOWER(${db.escape(req.body.username)})
+        phonenumber = ${db.escape(req.body.phonenumber)}
+        ;`,
       (err, result) => {
         if (result.length) {
           return res.status(409).send({
@@ -81,9 +82,9 @@ router.post('/sign-up',userMiddleware.validateRegister, (req, res) => {
 
   router.post('/sign-up-driver', userMiddleware.validateRegister, (req, res) => {
     db.query(
-      `SELECT * FROM drivers WHERE LOWER(email) = LOWER(${db.escape(
-        req.body.email
-      )});`,
+      `SELECT * FROM drivers WHERE LOWER(email) = LOWER(${db.escape(req.body.email)}) 
+       OR phonenumber = ${db.escape(req.body.phonenumber)}
+      ;`,
       (err, result) => {
         if (result.length) {
           return res.status(409).send({
@@ -165,7 +166,7 @@ router.post('/confirm-sign-up', (req,res) =>{
 
 router.post('/login', (req, res) => {
     db.query(
-      `SELECT * FROM users WHERE email = ${db.escape(req.body.email)};`,
+      `SELECT * FROM users WHERE phonenumber = ${db.escape(req.body.phonenumber)} OR username = ${db.escape(req.body.username)} ;`,
       (err, result) => {
         // user does not exists
         if (err) {
@@ -228,9 +229,9 @@ router.post('/login', (req, res) => {
     );
   });
   router.post('/login-driver', (req, res) => {
-    const {password, employeeid} = req.body;
+    const {password, employeeid, phonenumber} = req.body;
     db.query(
-      `SELECT * FROM drivers WHERE employeeid = ${db.escape(employeeid)};`,
+      `SELECT * FROM drivers WHERE employeeid = ${db.escape(employeeid)} or phonenumber = ${db.escape(phonenumber)};`,
       (err, result) => {
         // user does not exists
         if (err) {
@@ -256,7 +257,6 @@ router.post('/login', (req, res) => {
           result[0]['password'],
           (bErr, bResult) => {
             // wrong password
-            console.log(result);
             if (bErr) {
               return res.status(401).send({
                 msg: 'Employee ID or password is incorrect!'
@@ -264,10 +264,10 @@ router.post('/login', (req, res) => {
             }
   
             if (bResult) {
-              const {iddrive, email} = result[0];
+              const {iddriver, email} = result[0];
               const token = jwt.sign({
                   email,
-                  iddrive
+                  iddriver
                 },
                 'SECRETKEY', {
                   expiresIn: '1d'
@@ -290,7 +290,7 @@ router.post('/login', (req, res) => {
         );
        }
     );
-  });
+});
 
 
 // Admin
@@ -869,7 +869,16 @@ router.post('/drive-in-course', (req,res)=>{
 });
 
 router.post('/drive-retracting', (req, res)=>{
-    
+    const reservecode = req.body.idreserve;
+    const {iddriver} = req.userData;
+    console.log(iddriver, reservecode);
+
+    db.query(`UPDATE drives SET iddriver = ${db.escape(iddriver)} 
+    WHERE idreserve = ${db.escape(reservecode)}`,
+    function(e, r){
+        if(e) return res.status(401).send({msg: 'error....'});
+        else return res.status(200).send({msg: 'updated....'});
+    });
 });
 
 router.get('/driver-statics',(req, res)=>{
