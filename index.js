@@ -70,6 +70,11 @@ var users = [];
  
 io.on('connection', function (socket) {
     console.log('User connected', socket.id);
+
+    socket.on('disconnect', function() {
+        var i = users.indexOf(socket.id);
+        users.splice(i, 1);
+     });    
  
     // attach incoming listener for new user
     socket.on('user_connected', function (user) {
@@ -81,10 +86,14 @@ io.on('connection', function (socket) {
         io.emit('user_connected', user);
         console.log(users);
     });
+    socket.on('blocked', function(user){
+        let socketId = users[user];
+        io.to(socketId).emit('blocked', `Driver bloqueado, ID: ${socketId}`);
+    });
     socket.on('send_message', function (data) {
         // send event to receiver
         let socketId = users[data.to];
-        console.log(users);
+        //console.log(users);
     
         io.to(socketId).emit('new_message', data);
 
@@ -93,17 +102,27 @@ io.on('connection', function (socket) {
                 if(err) console.log(err);
         });
     });
+    
+    socket.on('notification', function(data){
+        let socketId = users[data.user];
+        socket.broadcast.emit('notification', data);
+
+        db.query(`INSERT into notifications (title, description, link) VALUES (${db.escape(data.title)},${db.escape(data.description)},${db.escape(data.link)})`, (er, rx)=>{
+            console.log(er)
+            console.log('notificou...');
+            if(rx) console.log(rx);
+        });
+    });
+
     socket.on('typing', function(user){
         let socketId = users[user];
         //io.to(to).emit('typing', user);
         socket.broadcast.emit('typing', user);
         console.log(user);
     });
-    socket.on('notification', function(data){
-        let socketId = users[data.user];
-        socket.broadcast.emit('notification', data.notify);
-    });
 });
+
+
 
 /*router.post('/get-message', (req, res, next)=>{
     const {from, to} = req.body;

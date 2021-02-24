@@ -67,11 +67,16 @@ module.exports = {
             pass: 'soltec2020'
         };
         
-        const transporter = nodemailer.createTransport({
+        const transporter = nodemailer.createTransport({ 
              service: 'gmail',
+             secureConnection: true,
+             port: 465,
              auth:{
                  user: account.user,
                  pass: account.pass
+             },
+             tls: {
+                secureProtocol: "TLSv1_method"
              }
         });
         
